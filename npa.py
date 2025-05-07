@@ -46,14 +46,16 @@ class NPA:
                         core = float(parts[offset + 2])       
                         valence = float(parts[offset + 3])    
                         rydberg = float(parts[offset + 4])    
-                        total = float(parts[offset + 5])      
+                        total = float(parts[offset + 5])
+                        spin_density = float(parts[offset + 6]) if len(parts) > offset + 6 else None      
 
                         self.npa_data[atom_label] = {
                             "Natural Charge": charge,
                             "Core": core,
                             "Valence": valence,
                             "Rydberg": rydberg,
-                            "Total": total
+                            "Total": total,
+                            "Spin Density": spin_density
                         }
                     except (ValueError, IndexError) as e:
                         print(f"Parse error in line: {line.strip()}")
@@ -68,8 +70,8 @@ class NPA:
             for key, value in data.items():
                 print(f"  {key}: {value}")
 
-    # --- visualise the charge with py3dmol ---
-    def visualise_charge(self, xyz_file, labels=True, stick_size=0.15, sphere_size=0.25):
+    # --- visualise with py3dmol ---
+    def visualise_property(self, xyz_file, property_name = "Natural Charge", labels=True, stick_size=0.15, sphere_size=0.25):
         xyz_data = open(xyz_file).read()
         xyz_lines = xyz_data.splitlines()
         num_atoms_xyz = int(xyz_lines[0])
@@ -79,9 +81,9 @@ class NPA:
         view.addModel(xyz_data, 'xyz')
         view.setStyle({'stick': {'radius': 0.15}})  # Keep bonds visible
 
-        # --- Color mapping based on NPA charge ---
-        charges = []
-        atom_indices_with_charge = []
+        # --- Color mapping based on NPA value ---
+        values = []
+        atom_indices_with_value = []
         xyz_elements = [line.split()[0] for line in xyz_data.split('\n')[2:2+num_atoms_xyz]]  # Extract XYZ elements
 
         for atom_label, data in self.npa_data.items():
@@ -101,20 +103,20 @@ class NPA:
                     continue
                 
                 try:
-                    charge = float(data['Natural Charge'])
-                    charges.append(charge)
-                    atom_indices_with_charge.append(atom_index)
+                    value = float(data[property_name])
+                    values.append(value)
+                    atom_indices_with_value.append(atom_index)
                 except (ValueError, TypeError):
-                    print(f"Invalid charge for {atom_label}: {data['Natural Charge']}")
+                    print(f"Invalid value for {atom_label}: {data[property_name]}")
             else:
                 print(f"Warning: Atom index {atom_index + 1} from NPA data out of range (XYZ has {num_atoms_xyz} atoms)")
 
-        # if not charges:
-        #     print("Error: No valid charges found. Using default colors.")
+        # if not values:
+        #     print("Error: No valid values found. Using default colors.")
         #     view.setStyle({}, {'sphere': {'color': 'grey', 'scale': 0.25}})
         else:
-            min_charge, max_charge = min(charges), max(charges)
-            norm = mcolors.Normalize(vmin=min_charge, vmax=max_charge)
+            min_value, max_value = min(values), max(values)
+            norm = mcolors.Normalize(vmin=min_value, vmax=max_value)
             cmap = cm.rainbow  # Using a rainbow colormap for a full spectrum of colors
 
             styled_indices = set()
@@ -126,8 +128,8 @@ class NPA:
                 atom_index = int(match.group(2)) - 1
                 if 0 <= atom_index < num_atoms_xyz and xyz_elements[atom_index] == match.group(1).upper():
                     try:
-                        charge = float(data['Natural Charge'])
-                        hex_color = mcolors.to_hex(cmap(norm(charge)))
+                        value = float(data[property_name])
+                        hex_color = mcolors.to_hex(cmap(norm(value)))
                         # Maintain both stick and sphere styles
                         view.setStyle({'index': atom_index}, {
                             'stick': {'radius': stick_size},
@@ -142,7 +144,7 @@ class NPA:
             if missing_indices:
                 view.setStyle({'index': list(missing_indices)}, {'sphere': {'color': 'grey', 'scale': 0.2}})
 
-            print(f"NPA Charge range: {min_charge:.3f} to {max_charge:.3f}")
+            print(f"NPA Value range: {min_value:.3f} to {max_value:.3f}")
             print(f"Found {len(styled_indices)}/{num_atoms_xyz} atoms")
         if labels:
             for atom_label, data in self.npa_data.items():
@@ -153,14 +155,14 @@ class NPA:
                 atom_index = int(match.group(2)) - 1  # 0 indexed
                 if 0 <= atom_index < num_atoms_xyz and xyz_elements[atom_index] == element:
                     try:
-                        charge = float(data['Natural Charge'])
+                        value = float(data[property_name])
                     except (ValueError, TypeError):
                         continue
                     parts = xyz_lines[atom_index+2].split()
                     x, y, z = map(float, parts[1:4])
 
-                    hex_color = mcolors.to_hex(cmap(norm(charge)))
-                    view.addLabel(f"{charge:.3f}", {
+                    hex_color = mcolors.to_hex(cmap(norm(value)))
+                    view.addLabel(f"{value:.3f}", {
                         'position': {'x': x, 'y': y, 'z': z},
                         'backgroundColor': hex_color,
                         'backgroundOpacity': 0.5,
@@ -168,13 +170,13 @@ class NPA:
                         'fontSize': 10
                     })
 
-        # --- Color bar for charge visualization ---
+        # --- Color bar for visualization ---
         fig, ax = plt.subplots(figsize=(6, 1))
         fig.subplots_adjust(bottom=0.5)
         cmap = cm.rainbow
-        norm = mcolors.Normalize(vmin=min_charge, vmax=max_charge)
+        norm = mcolors.Normalize(vmin=min_value, vmax=max_value)
         cb = fig.colorbar(cm.ScalarMappable(norm=norm, cmap=cmap), cax=ax, orientation='horizontal')
-        cb.set_label('NPA Charge')
+        cb.set_label(property_name)
         plt.show()
 
         view.zoomTo()
