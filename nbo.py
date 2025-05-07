@@ -181,7 +181,14 @@ class NBO_SOP:
 ## i.e. the larger the E(2) value the thicker the cylinder and the more red it is
 # i.e. the smaller the E(2) value the thinner the cylinder and the more blue it is
 ##########################################
-    def visualise_nbo_data(self, xyz_file, view=None, display=True, donor=None, acceptor=None, donor_type="LP", acceptor_type="BD*", E2_below=None, E2_above=None):
+    def visualise_nbo_data(self, xyz_file, view=None, display=True, donor=None, acceptor=None, donor_type="LP", acceptor_type="BD*", E2_below=None, E2_above=None, label=True, print_latex=False):
+        print("*" * 150)
+        print("     Note this defaults to LP to BD* interactions, if you want to see other interactions please specify the donor and acceptor types.")
+        print("*" * 150)
+        print("")
+        connection_indexes = []
+        vmin = 0
+        vmax = 1
         with open(xyz_file, 'r') as f:
             lines = f.readlines()
         coordinates = []
@@ -260,21 +267,27 @@ class NBO_SOP:
                 mid_x = (coordinates[donor_index][0] + coordinates[acceptor_index][0]) / 2
                 mid_y = (coordinates[donor_index][1] + coordinates[acceptor_index][1]) / 2
                 mid_z = (coordinates[donor_index][2] + coordinates[acceptor_index][2]) / 2
-                view.addLabel(f"E(2): {e2_value:.2f}", {
-                    'position': {'x': mid_x, 'y': mid_y, 'z': mid_z},
-                    'backgroundColor': color,
-                    'backgroundOpacity': 0.3,
-                    'fontSize': 10,
-                    'fontColor': 'black',
-                    'fontWeight': 'bold'
-                })
+                if label:
+                    view.addLabel(f"E(2): {e2_value:.2f}", {
+                        'position': {'x': mid_x, 'y': mid_y, 'z': mid_z},
+                        'backgroundColor': color,
+                        'backgroundOpacity': 0.3,
+                        'fontSize': 10,
+                        'fontColor': 'black',
+                        'fontWeight': 'bold'
+                    })
                 view.addCylinder({
                     'start': {'x': coordinates[donor_index][0], 'y': coordinates[donor_index][1], 'z': coordinates[donor_index][2]},
                     'end': {'x': coordinates[acceptor_index][0], 'y': coordinates[acceptor_index][1], 'z': coordinates[acceptor_index][2]},
                     'color': color,
                     'radius': radius,
-                    'opacity': 0.6
+                    'opacity': 0.8
                 })
+                connection_indexes.append((donor_index, acceptor_index))
+                if entry["E(2)"] > vmax:
+                    vmax = entry["E(2)"]
+                if entry["E(2)"] < vmin:
+                    vmin = entry["E(2)"]
 
         # print only the visualised data in a table
         print(f"{'Donor Index':<12} {'Donor Type':<10} {'Donor Orb No':<12} "
@@ -319,7 +332,64 @@ class NBO_SOP:
         print("=" * 160)
         print(f"Total number of NBO interactions of interest: {counter}")
 
+        if print_latex:
+            """prints same as above but in latex table format ready for copy and paste without the donor/acceptor index and orbital numbers"""
+            print("\\begin{table}[H]")
+            print("\\centering")
+            print("\\begin{tabular}{|c|c|c|c|c|c|c|}")
+            print("\\hline")
+            print(f"{'Donor Type':<10} & {'Donor Atoms':<25} & {'Acceptor Type':<12} & "
+                f"{'Acceptor Atoms':<25} & {'E(2)':>8} & {'E Diff':>8} & {'Fock Elem':>10} \\\\")
+            print("\\hline")
+            for entry in self.nbo_data:
+                if entry["Donor Type"] == donor_type and entry["Acceptor Type"] == acceptor_type:
+                    if donor is not None:
+                        if len(donor) == 1:
+                            if not any(donor[0] in atom for atom in entry["Donor Atoms"]):
+                                continue
+                        elif len(donor) == 2:
+                            if len(entry["Donor Atoms"]) != 2:
+                                continue
+                            elif not (donor[0] == ''.join(filter(str.isalpha, entry["Donor Atoms"][0])) and
+                                    donor[1] == ''.join(filter(str.isalpha, entry["Donor Atoms"][1]))):
+                                continue
+                    if acceptor is not None:
+                        if len(acceptor) == 1:
+                            if not any(acceptor[0] in atom for atom in entry["Acceptor Atoms"]):
+                                continue
+                        elif len(acceptor) == 2:
+                            if len(entry["Acceptor Atoms"]) != 2:
+                                continue
+                            elif not (acceptor[0] == ''.join(filter(str.isalpha, entry["Acceptor Atoms"][0])) and
+                                    acceptor[1] == ''.join(filter(str.isalpha, entry["Acceptor Atoms"][1]))):
+                                continue
+                    if E2_below is not None and entry["E(2)"] > E2_below:
+                        continue
+                    if E2_above is not None and entry["E(2)"] < E2_above:
+                        continue
+                    donor_atoms = ", ".join(entry["Donor Atoms"])
+                    acceptor_atoms = ", ".join(entry["Acceptor Atoms"])
+                    row = (f"{entry['Donor Type']:<10} & {donor_atoms:<25} & {entry['Acceptor Type']:<12} "
+                        f"& {acceptor_atoms:<25} & {entry['E(2)']:>8.2f} & {entry['E Diff']:>8.2f} & {entry['Fock Elem']:>10.2f} \\\\")
+                    print(row)
+            print("\\hline")
+            print("\\end{tabular}")
+            print("\\caption{NBO Second Order Perturbation Theory Analysis}")
+            print("\\label{tab:nbo_sop}")
+            print("\\end{table}")
         # Show the view
         if display:
             view.zoomTo()
             view.show()
+        
+        # -- color bar to show the spread of E(2) values --
+        fig, ax = plt.subplots(figsize=(6, 1))
+        fig.subplots_adjust(bottom=0.5)
+        cmap = cm.rainbow
+        norm = colors.Normalize(vmin=vmin, vmax=vmax)
+        cb = fig.colorbar(cm.ScalarMappable(norm=norm, cmap=cmap), cax=ax, orientation='horizontal')
+        cb.set_label('E(2) kcal/mol range')
+        plt.show()
+
+        connection_indexes = set(connection_indexes)
+        return connection_indexes if not display else None
