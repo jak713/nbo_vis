@@ -71,7 +71,8 @@ class NPA:
                 print(f"  {key}: {value}")
 
     # --- visualise with py3dmol ---
-    def visualise_property(self, xyz_file, property_name = "Natural Charge", labels=True, stick_size=0.15, sphere_size=0.25):
+    def visualise_property(self, xyz_file, property_name = "Natural Charge", gradient = "rainbow", labels=True, stick_size=0.15, sphere_size=0.25):
+        g = gradient.lower()
         xyz_data = open(xyz_file).read()
         xyz_lines = xyz_data.splitlines()
         num_atoms_xyz = int(xyz_lines[0])
@@ -117,7 +118,7 @@ class NPA:
         else:
             min_value, max_value = min(values), max(values)
             norm = mcolors.Normalize(vmin=min_value, vmax=max_value)
-            cmap = cm.rainbow  # Using a rainbow colormap for a full spectrum of colors
+            cmap = cm.get_cmap(g)
 
             styled_indices = set()
             for atom_label, data in self.npa_data.items():
@@ -173,11 +174,10 @@ class NPA:
         # --- Color bar for visualization ---
         fig, ax = plt.subplots(figsize=(6, 1))
         fig.subplots_adjust(bottom=0.5)
-        cmap = cm.rainbow
+        cmap = cm.get_cmap(g)
         norm = mcolors.Normalize(vmin=min_value, vmax=max_value)
         cb = fig.colorbar(cm.ScalarMappable(norm=norm, cmap=cmap), cax=ax, orientation='horizontal')
         cb.set_label(property_name)
         plt.show()
-
         view.zoomTo()
         view.show()
