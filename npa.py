@@ -99,8 +99,8 @@ class NPA:
             
             # Validate index and element
             if 0 <= atom_index < num_atoms_xyz:
-                if xyz_elements[atom_index] != element:
-                    print(f"Element mismatch at index {atom_index}: XYZ={xyz_elements[atom_index]}, NPA={element}")
+                if xyz_elements[atom_index].upper() != element.upper():
+                    print(f"Element mismatch at index {atom_index}: XYZ={xyz_elements[atom_index].upper()}, NPA={element.upper()}")
                     continue
                 
                 try:
@@ -127,7 +127,7 @@ class NPA:
                     continue
                     
                 atom_index = int(match.group(2)) - 1
-                if 0 <= atom_index < num_atoms_xyz and xyz_elements[atom_index] == match.group(1).upper():
+                if 0 <= atom_index < num_atoms_xyz and xyz_elements[atom_index].upper() == match.group(1).upper():
                     try:
                         value = float(data[property_name])
                         hex_color = mcolors.to_hex(cmap(norm(value)))
