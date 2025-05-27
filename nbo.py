@@ -46,6 +46,24 @@ class NBO_SOP:
         self.filepath = filepath
         self.extract_nbo_data()
 
+    def help():
+        table_header = f"{'Command':<35} {'Description'}"
+        print(table_header)
+        print("-" * len(table_header))
+        print(f"{'nbo = NBO_SOP(filepath)':<35} Create an instance with the file path to the NBO data.")
+        print(f"{'nbo.extract_nbo_data()':<35} Extract NBO data from the file.")
+        print(f"{'nbo.print_nbo_data()':<35} Print all NBO data as a formatted table.")
+        print(f"{'nbo.print_loneToAnti()':<35} Print LP → BD* interactions only.")
+        print(f"{'nbo.visualise_nbo_data(...)':<35} Visualise interactions with py3Dmol.")
+        print(f"{'':<35} xyz_file: path to .xyz file")
+        print(f"{'':<35} view: optional py3Dmol view object")
+        print(f"{'':<35} display: bool to show the plot")
+        print(f"{'':<35} donor, acceptor: filter by atoms, can be single atom or double e.g. 'C' or 'CN' or 'CC'")
+        print(f"{'':<35} donor_type, acceptor_type: e.g. 'LP', 'BD*', 'RY'")
+        print(f"{'':<35} E2_below, E2_above: numeric thresholds for E(2)")
+        print(f"{'':<35} label: bool to label cylinders")
+        print(f"{'':<35} print_latex: bool to output a LaTeX table")
+
     def extract_nbo_data(self):
         self.nbo_data = []
         with open(self.filepath, 'r') as f:
@@ -181,14 +199,15 @@ class NBO_SOP:
 ## i.e. the larger the E(2) value the thicker the cylinder and the more red it is
 # i.e. the smaller the E(2) value the thinner the cylinder and the more blue it is
 ##########################################
-    def visualise_nbo_data(self, xyz_file, view=None, display=True, donor=None, acceptor=None, donor_type="LP", acceptor_type="BD*", E2_below=None, E2_above=None, label=True, print_latex=False):
+    def visualise_nbo_data(self, xyz_file, view=None, display=True, donor=None, acceptor=None, donor_type="LP", acceptor_type="BD*", E2_below=None, E2_above=None, label=True, print_latex=False, proportional_radius=False):
         print("*" * 150)
         print("     Note this defaults to LP to BD* interactions, if you want to see other interactions please specify the donor and acceptor types.")
         print("*" * 150)
         print("")
         connection_indexes = []
-        vmin = 0
-        vmax = 1
+        interaction_distances = []
+        vmin = E2_above if E2_above is not None else 0  # Minimum E(2) value for color normalization
+        vmax = E2_below if E2_below is not None else 1  # Maximum E(2) value for color normalization
         with open(xyz_file, 'r') as f:
             lines = f.readlines()
         coordinates = []
@@ -202,7 +221,7 @@ class NBO_SOP:
 
         # Create a view for visualization
         if view is None:
-            view = py3Dmol.view(width=1000, height=800)
+            view = py3Dmol.view(width=1500, height=1000)
             view.addModel(open(xyz_file, 'r').read(), 'xyz')
             view.setStyle({'stick': {'radius': 0.03}})
             view.setBackgroundColor('white')
@@ -248,6 +267,7 @@ class NBO_SOP:
                 if E2_above is not None and entry["E(2)"] < E2_above:
                     continue
 
+
                 donor_atoms = entry["Donor Atoms"]
                 acceptor_atoms = entry["Acceptor Atoms"]
                 # if donor or acceptor:
@@ -257,16 +277,27 @@ class NBO_SOP:
                 donor_index = int(re.findall(r'\d+', donor_atoms[-1])[-1]) - 1
                 acceptor_index = int(re.findall(r'\d+', acceptor_atoms[-1])[-1]) - 1
                 e2_value = entry["E(2)"]
-                norm = colors.Normalize(vmin=E2_above if E2_above else 0, vmax=E2_below if E2_below else 1)  
+                norm = colors.Normalize(vmin=vmin, vmax=vmax)  
                 cmap = plt.colormaps.get_cmap('rainbow')
                 rgb = cmap(norm(e2_value))[:3]  # Extract the RGB components
                 color = '#%02x%02x%02x' % (int(rgb[0]*255), int(rgb[1]*255), int(rgb[2]*255))
-                radius = 0.05
+                if proportional_radius:
+                    radius = 0.01 + (e2_value / vmax) * 0.04
+                else:
+                    radius = 0.05                
+
 
                 # show e2 value as label at midpoint of the cylinder
                 mid_x = (coordinates[donor_index][0] + coordinates[acceptor_index][0]) / 2
                 mid_y = (coordinates[donor_index][1] + coordinates[acceptor_index][1]) / 2
                 mid_z = (coordinates[donor_index][2] + coordinates[acceptor_index][2]) / 2
+
+                # calculating interaction distance as the distance between the midpoints of the donor and acceptor atoms in 3D space (note angstroms)
+                int_dist = ((coordinates[donor_index][0] - coordinates[acceptor_index][0]) ** 2 +
+                            (coordinates[donor_index][1] - coordinates[acceptor_index][1]) ** 2 +
+                            (coordinates[donor_index][2] - coordinates[acceptor_index][2]) ** 2) ** 0.5
+                interaction_distances.append(int_dist)
+
                 if label:
                     view.addLabel(f"E(2): {e2_value:.2f}", {
                         'position': {'x': mid_x, 'y': mid_y, 'z': mid_z},
@@ -292,8 +323,8 @@ class NBO_SOP:
         # print only the visualised data in a table
         print(f"{'Donor Index':<12} {'Donor Type':<10} {'Donor Orb No':<12} "
             f"{'Donor Atoms':<25} {'Acceptor Index':<15} {'Acceptor Type':<12} "
-            f"{'Acceptor Orb No':<15} {'Acceptor Atoms':<25} {'E(2)':>8} {'E Diff':>8} {'Fock Elem':>10}")
-        print("=" * 160)
+            f"{'Acceptor Orb No':<15} {'Acceptor Atoms':<25} {'E(2)':>8} {'E Diff':>8} {'Fock Elem':>10} {'Int. Dist Å':>15}")
+        print("=" * 180)
         counter = 0
         for entry in self.nbo_data:
             if entry["Donor Type"] == donor_type and entry["Acceptor Type"] == acceptor_type:
@@ -319,27 +350,31 @@ class NBO_SOP:
                     continue
                 if E2_above is not None and entry["E(2)"] < E2_above:
                     continue
+                # interaction distance is the distance between the midpoints of the donors and acceptors
+
+            
                 donor_atoms = ", ".join(entry["Donor Atoms"])
                 acceptor_atoms = ", ".join(entry["Acceptor Atoms"])
                 row = (
                     f"{entry['Donor Index']:<12} {entry['Donor Type']:<10} {entry['Donor Orb No']:<12} "
                     f"{donor_atoms:<25} {entry['Acceptor Index']:<15} {entry['Acceptor Type']:<12} "
                     f"{entry['Acceptor Orb No']:<15} {acceptor_atoms:<25} {entry['E(2)']:>8.2f} "
-                    f"{entry['E Diff']:>8.2f} {entry['Fock Elem']:>10.2f}"
+                    f"{entry['E Diff']:>8.2f} {entry['Fock Elem']:>10.2f} {(interaction_distances[counter]):>15.2f}"
                 )
                 print(row)
                 counter += 1
-        print("=" * 160)
+        print("=" * 180)
         print(f"Total number of NBO interactions of interest: {counter}")
 
         if print_latex:
             """prints same as above but in latex table format ready for copy and paste without the donor/acceptor index and orbital numbers"""
+            counter = 0
             print("\\begin{table}[H]")
             print("\\centering")
-            print("\\begin{tabular}{|c|c|c|c|c|c|c|}")
+            print("\\begin{tabular}{|c|c|c|c|c|c|c|c}")
             print("\\hline")
             print(f"{'Donor Type':<10} & {'Donor Atoms':<25} & {'Acceptor Type':<12} & "
-                f"{'Acceptor Atoms':<25} & {'E(2)':>8} & {'E Diff':>8} & {'Fock Elem':>10} \\\\")
+                f"{'Acceptor Atoms':<25} & {'E(2)':>8} & {'E Diff':>8} & {'Fock Elem':>10} & {'IntDist':>10}\\\\")
             print("\\hline")
             for entry in self.nbo_data:
                 if entry["Donor Type"] == donor_type and entry["Acceptor Type"] == acceptor_type:
@@ -370,8 +405,9 @@ class NBO_SOP:
                     donor_atoms = ", ".join(entry["Donor Atoms"])
                     acceptor_atoms = ", ".join(entry["Acceptor Atoms"])
                     row = (f"{entry['Donor Type']:<10} & {donor_atoms:<25} & {entry['Acceptor Type']:<12} "
-                        f"& {acceptor_atoms:<25} & {entry['E(2)']:>8.2f} & {entry['E Diff']:>8.2f} & {entry['Fock Elem']:>10.2f} \\\\")
+                        f"& {acceptor_atoms:<25} & {entry['E(2)']:>8.2f} & {entry['E Diff']:>8.2f} & {entry['Fock Elem']:>10.2f} & {interaction_distances[counter]:>10.2f} \\\\")
                     print(row)
+                    counter += 1
             print("\\hline")
             print("\\end{tabular}")
             print("\\caption{NBO Second Order Perturbation Theory Analysis}")
@@ -387,8 +423,12 @@ class NBO_SOP:
         fig.subplots_adjust(bottom=0.5)
         cmap = cm.rainbow
         norm = colors.Normalize(vmin=vmin, vmax=vmax)
-        cb = fig.colorbar(cm.ScalarMappable(norm=norm, cmap=cmap), cax=ax, orientation='horizontal')
-        cb.set_label('E(2) kcal/mol range')
+        sm = cm.ScalarMappable(norm=norm, cmap=cmap)
+        sm.set_array([])  # Needed for the ScalarMappable
+        cb = fig.colorbar(sm, cax=ax, orientation='horizontal')
+        cb.set_ticks([vmin, (vmin+vmax)/2, vmax])
+        cb.set_ticklabels([f"{vmin:.2f}", f"{(vmin+vmax)/2:.2f}", f"{vmax:.2f}"])
+        cb.set_label(f'E(2) kcal/mol range\n[min: {vmin:.2f}, max: {vmax:.2f}]')
         plt.show()
 
         connection_indexes = set(connection_indexes)
