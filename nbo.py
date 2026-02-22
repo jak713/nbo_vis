@@ -3,44 +3,8 @@ import re
 import py3Dmol
 import matplotlib.pyplot as plt
 
-# SECOND ORDER PERTURBATION THEORY ANALYSIS OF FOCK MATRIX IN NBO BASIS
-
-#      Threshold for printing:   0.50 kcal/mol
-#     (Intermolecular threshold: 0.05 kcal/mol)
-#                                                           E(2) E(NL)-E(L) F(L,NL)
-#       Donor (L) NBO              Acceptor (NL) NBO      kcal/mol   a.u.    a.u.
-#  ===============================================================================
-                
-#  within unit  1
-#   153. LP ( 1) N  1           555. BD*( 1) C 30- C 52     11.15    1.09   0.099
-#   153. LP ( 1) N  1           841. RY ( 9) N  1            0.70    4.88   0.052
-#   153. LP ( 1) N  1          1398. RY ( 1) C 30           13.80    1.57   0.132
-#   160. LP ( 1) C116           649. BD*( 2) C 96- C103    146.42    0.20   0.154
-#   160. LP ( 1) C116           651. BD*( 2) C 97- C104    139.08    0.21   0.153
-#   160. LP ( 1) C116           718. BD*( 1) C133- C153      6.64    0.76   0.063
-#   160. LP ( 1) C116           719. BD*( 1) C133- C154      6.02    0.76   0.060
-#   160. LP ( 1) C116           720. BD*( 2) C133- C154     35.66    0.20   0.076
-
-
-### LV = lone valence orbital, very low occupancy 
 # Donor (donates electron density) = LP or BD (L=Lewis) if lone pair then the donor is one atom if bonding orbital then the donor is two atoms connected by a bond
 #Acceptor (receives electron density hence being stabilised) = BD* or RY (NL=Non-Lewis) if rydberg orbital then the acceptor is one atom if antibodning orbital then the acceptor is two atoms connected by a bond
-# the example data to be extracted is as follows:
-#  153. LP ( 1) N  1           555. BD*( 1) C 30- C 52     11.15    1.09   0.099
-# 153 = specific NBO index for the specific orbital (important for the NBO analysis)
-# LP = lone pair donor
-# ( 1) = the first lone pair on the atom
-# N = nitrogen atom
-# 1 = atom number
-# 555 = specific NBO index for the specific orbital (important for the NBO analysis)
-# BD* = anti-bonding orbital acceptor
-# ( 1) = the first anti-bonding orbital between the two atoms
-# C 30- C 52 = the two atoms connected by the bond
-# 11.15 = E(2) which is the stabilisation energy in kcal/mol
-# 1.09 = the energy difference between the donor and the acceptor orbitals in a.u.
-# 0.099 = the fock matrix element between the donor and the acceptor orbitals in a.u. (quantifies interaction strength)
-
-# need to design the right kind of regex to extract the data from the lines and the right kind of dictionary to store the data
 class NBO_SOP:
     def __init__(self, filepath):
         self.filepath = filepath
