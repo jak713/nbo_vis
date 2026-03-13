@@ -171,7 +171,7 @@ class NBO_SOP:
         connection_indexes = []
         interaction_distances = []
         vmin = E2_above if E2_above is not None else 0  # Minimum E(2) value for color normalization
-        vmax = E2_below if E2_below is not None else 1  # Maximum E(2) value for color normalization
+        vmax = E2_below if E2_below is not None else 1 if vmin == 0 else vmin + 0.1  # Maximum E(2) value for color normalization
         with open(xyz_file, 'r') as f:
             lines = f.readlines()
         coordinates = []
